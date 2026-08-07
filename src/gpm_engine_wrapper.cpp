@@ -141,7 +141,9 @@ xt::pyarray<double> cressman_map(PyVPTree& tree_wrapper, xt::pyarray<double>& gr
     size_t n = gridPoints.shape(0);
     double R2 = maxDistance * maxDistance;
     auto grid_values = xt::pyarray<double>::from_shape({n});
-    grid_values.fill(-9999.0);
+    
+    // Fallback value aligned to Stacy Brodik's legacy UW definition (#define NODATA -999.0)
+    grid_values.fill(-999.0); 
 
     {
         py::gil_scoped_release release;
@@ -150,14 +152,25 @@ xt::pyarray<double> cressman_map(PyVPTree& tree_wrapper, xt::pyarray<double>& gr
             Point query_p = {gridPoints(i, 0), gridPoints(i, 1)};
             auto neighbors = tree_wrapper.native_vptree->getAllInRange(&query_p, maxDistance);
 
-            double sum_w = 0.0, sum_wbz = 0.0;
+            double sum_w = 0.0, sum_wZ = 0.0; 
             for (const auto& res : neighbors) {
                 double d2 = res.first * res.first;
                 double w = (R2 - d2) / (R2 + d2);
-                sum_wbz += res.second->dbz * w;
+                
+                // 1. PHYSICAL CORRECTION: Linearise raw logarithmic dBZ to linear Z space on the fly
+                double linear_Z = std::pow(10.0, res.second->dbz / 10.0);
+                
+                sum_wZ += linear_Z * w;
                 sum_w += w;
             }
-            if (sum_w > 0.0) grid_values(i) = sum_wbz / sum_w;
+            
+            if (sum_w > 0.0) {
+                double avg_Z = sum_wZ / sum_w;
+                
+                // 2. PHYSICAL CORRECTION: Convert the finalized weighted average back to logarithmic dBZ
+                // Adding a 1e-5 epsilon preserves mathematical boundaries against log10(0) domain errors
+                grid_values(i) = 10.0 * std::log10(avg_Z + 1e-5);
+            }
         }
     }
     return grid_values;

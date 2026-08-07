@@ -6,10 +6,10 @@
 #include <omp.h>
 
 // Your original headers
-#include "include/VPTree.h"
-#include "include/Point.h"
-#include "include/Distance.h"
-#include "include/GreatCircleDistance.h" 
+#include "VPTree.h"
+#include "Point.h"
+#include "Distance.h"
+#include "GreatCircleDistance.h" 
 
 namespace py = pybind11;
 
